@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Image Captioner & Tagger</title>
+    <!-- Memuat Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat Lucide Icons (untuk ikon) -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      /* Menggunakan font Inter secara default */
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
+      body {
+        font-family: "Inter", sans-serif;
+        background-color: #f0f4f8; /* Latar belakang abu-abu muda */
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 2rem 1rem;
+      }
+      .card {
+        background-color: white;
+        border-radius: 1.5rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+        width: 100%;
+        max-width: 900px;
+      }
+      .dropzone-active {
+        border-color: #3b82f6 !important; /* Warna biru saat drag over */
+        background-color: #eff6ff !important;
+      }
+      /* Custom scrollbar for better aesthetics */
+      .output-scroll-container::-webkit-scrollbar {
+        width: 8px;
+      }
+      .output-scroll-container::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body class="selection:bg-blue-100 selection:text-blue-800">
+    <div id="app-container" class="space-y-6 w-full max-w-4xl">
+      <!-- Input Card (A. Bagian Unggah) -->
+      <div id="input-card" class="card p-8 md:p-10">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">
+          AI Image Captioner & Tagger
+        </h1>
+        <p class="text-sm text-gray-500 mb-6">Didukung oleh Gemini 2.5 Flash</p>
+
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">
+          A. Bagian Unggah
+        </h2>
+
+        <!-- Area Dropzone Gambar -->
+        <div
+          id="dropzone"
+          class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer transition duration-300 hover:border-blue-500 hover:bg-blue-50"
+          ondragover="event.preventDefault(); this.classList.add('dropzone-active')"
+          ondragleave="this.classList.remove('dropzone-active')"
+          ondrop="event.preventDefault(); handleFileDrop(event); this.classList.remove('dropzone-active')"
+          onclick="document.getElementById('file-input').click()"
+        >
+          <input
+            type="file"
+            id="file-input"
+            accept="image/*"
+            class="hidden"
+            onchange="handleFileSelect(event)"
+          />
+
+          <div id="dropzone-content">
+            <div class="flex flex-col items-center justify-center">
+              <i data-lucide="image" class="w-10 h-10 text-gray-400 mb-3"></i>
+              <p class="text-gray-600 font-medium mb-1">
+                Unggah Gambar (Drag & Drop atau Klik)
+              </p>
+              <p class="text-sm text-gray-500">
+                Maks. 5MB. Format: JPG, PNG, WEBP.
+              </p>
+            </div>
+          </div>
+
+          <!-- Thumbnail Preview Area -->
+          <div
+            id="image-preview"
+            class="hidden mt-4 mx-auto w-32 h-32 bg-gray-100 rounded-lg overflow-hidden border border-gray-200 shadow-md"
+          >
+            <img
+              id="preview-img"
+              class="w-full h-full object-cover"
+              alt="Pratinjau Gambar"
+            />
+          </div>
+        </div>
+
+        <!-- Input & Dropdown Container -->
+        <div class="mt-6 space-y-4">
+          <div class="flex flex-col">
+            <label
+              for="instructions-input"
+              class="text-sm font-medium text-gray-700 mb-1"
+              >Instruksi Tambahan (Opsional)</label
+            >
+            <input
+              type="text"
+              id="instructions-input"
+              placeholder="Contoh: 'Target audiens kami adalah remaja, gunakan bahasa gaul.'"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150"
+              maxlength="200"
+            />
+          </div>
+
+          <div class="flex flex-col">
+            <label
+              for="caption-type-select"
+              class="text-sm font-medium text-gray-700 mb-1"
+              >Tipe Caption</label
+            >
+            <select
+              id="caption-type-select"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg appearance-none bg-white focus:ring-blue-500 focus:border-blue-500 transition duration-150 pr-8"
+            >
+              <option value="Deskriptif">Deskriptif (Informative)</option>
+              <option value="Humoris" selected>Humoris (Witty/Funny)</option>
+              <option value="Puitis">Puitis (Poetic/Inspiring)</option>
+              <option value="Call-to-Action">
+                Call-to-Action (Mendorong Interaksi)
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tombol Aksi -->
+        <button
+          id="generate-button"
+          class="mt-6 w-full py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-lg shadow-blue-500/50 hover:bg-blue-700 transition duration-150 disabled:bg-blue-400 disabled:shadow-none flex items-center justify-center"
+          disabled
+        >
+          <i data-lucide="zap" class="w-5 h-5 mr-2"></i>
+          <span id="button-text">Analisis Gambar & Buat Caption</span>
+        </button>
+
+        <!-- Notifikasi Pesan -->
+        <div
+          id="message-box"
+          class="mt-4 p-3 hidden rounded-lg text-sm"
+          role="alert"
+        ></div>
+      </div>
+
+      <!-- Output Card (Hasil) - Tersembunyi hingga ada hasil -->
+      <div id="output-card" class="card p-8 md:p-10 hidden">
+        <div
+          id="loading-spinner"
+          class="flex items-center justify-center space-x-2 mb-6 hidden"
+        >
+          <div
+            class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"
+          ></div>
+          <p class="text-blue-600 font-semibold">
+            Sedang Menganalisis Gambar & Membuat Caption...
+          </p>
+        </div>
+
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">
+          B. Hasil (Opsi Caption & Hashtag)
+        </h2>
+
+        <!-- Area Hashtag -->
+        <div class="mb-6 border p-4 rounded-xl">
+          <div class="flex justify-between items-start mb-3">
+            <h3 class="text-lg font-medium text-gray-800">Hashtag Terkait:</h3>
+            <button
+              class="text-sm text-blue-600 hover:text-blue-800 font-medium transition duration-150"
+              onclick="copyAllHashtags()"
+            >
+              <i data-lucide="copy" class="w-4 h-4 inline mr-1"></i> Copy Semua
+              Hashtag
+            </button>
+          </div>
+          <div
+            id="hashtags-container"
+            class="flex flex-wrap gap-2 min-h-[30px] items-center"
+          >
+            <!-- Hashtags akan di-inject di sini -->
+          </div>
+        </div>
+
+        <!-- Area Captions -->
+        <div id="captions-container" class="space-y-4 output-scroll-container">
+          <!-- Captions akan di-inject di sini -->
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      // Import modul Firebase yang diperlukan
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+
+      // --- Konfigurasi dan Setup Global ---
+      // URL API backend kita
+      const API_URL = "/api/generate";
+
+      // Variabel global untuk status gambar
+      let uploadedImageFile = null;
+
+      // Variabel DOM
+      const elements = {
+        dropzone: document.getElementById("dropzone"),
+        fileInput: document.getElementById("file-input"),
+        imagePreview: document.getElementById("image-preview"),
+        previewImg: document.getElementById("preview-img"),
+        dropzoneContent: document.getElementById("dropzone-content"),
+        instructionsInput: document.getElementById("instructions-input"),
+        captionTypeSelect: document.getElementById("caption-type-select"),
+        generateButton: document.getElementById("generate-button"),
+        buttonText: document.getElementById("button-text"),
+        messageBox: document.getElementById("message-box"),
+        outputCard: document.getElementById("output-card"),
+        loadingSpinner: document.getElementById("loading-spinner"),
+        hashtagsContainer: document.getElementById("hashtags-container"),
+        captionsContainer: document.getElementById("captions-container"),
+      };
+
+      // Initialize Firebase (hanya agar kode tidak error, tapi tidak digunakan untuk auth/db)
+      const appId =
+        typeof __app_id !== "undefined" ? __app_id : "default-app-id";
+      const firebaseConfig =
+        typeof __firebase_config !== "undefined"
+          ? JSON.parse(__firebase_config)
+          : {};
+      if (Object.keys(firebaseConfig).length > 0) {
+        initializeApp(firebaseConfig);
+      }
+
+      // --- Fungsi Helper UX/UI ---
+
+      /**
+       * Menampilkan pesan notifikasi (sukses, error, info).
+       * @param {string} message - Pesan yang akan ditampilkan.
+       * @param {string} type - Tipe pesan ('success', 'error', 'info').
+       */
+      const showMessage = (message, type) => {
+        const box = elements.messageBox;
+        box.textContent = message;
+        box.className = "mt-4 p-3 rounded-lg text-sm"; // Reset classes
+
+        switch (type) {
+          case "success":
+            box.classList.add("bg-green-100", "text-green-800", "block");
+            break;
+          case "error":
+            box.classList.add("bg-red-100", "text-red-800", "block");
+            break;
+          case "info":
+          default:
+            box.classList.add("bg-blue-100", "text-blue-800", "block");
+        }
+        // Sembunyikan setelah 5 detik
+        setTimeout(() => box.classList.add("hidden"), 5000);
+      };
+
+      /**
+       * Mengaktifkan atau menonaktifkan status loading.
+       * @param {boolean} isLoading - Status loading.
+       */
+      const setLoading = (isLoading) => {
+        elements.generateButton.disabled = isLoading || !uploadedImageFile;
+        elements.instructionsInput.disabled = isLoading;
+        elements.captionTypeSelect.disabled = isLoading;
+
+        if (isLoading) {
+          elements.buttonText.textContent = "Memproses... Harap Tunggu";
+          elements.loadingSpinner.classList.remove("hidden");
+          elements.outputCard.classList.remove("hidden");
+        } else {
+          elements.buttonText.textContent = "Analisis Gambar & Buat Caption";
+          elements.loadingSpinner.classList.add("hidden");
+        }
+      };
+
+      // --- Fungsi Penanganan File ---
+
+      /**
+       * Memproses file yang dipilih atau di-drop.
+       * @param {File} file - Objek File gambar.
+       */
+      const processFile = (file) => {
+        if (!file || !file.type.startsWith("image/")) {
+          showMessage(
+            "Hanya file gambar (JPG, PNG, WEBP) yang diizinkan.",
+            "error"
+          );
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          // 5MB limit
+          showMessage("Ukuran file terlalu besar. Maksimal 5MB.", "error");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64String = e.target.result;
+          // Simpan objek File global
+          uploadedImageFile = file;
+
+          // Tampilkan pratinjau
+          elements.previewImg.src = base64String;
+          elements.dropzoneContent.classList.add("hidden");
+          elements.imagePreview.classList.remove("hidden");
+
+          // Aktifkan tombol generate
+          elements.generateButton.disabled = false;
+          showMessage(
+            "Gambar berhasil diunggah dan siap dianalisis.",
+            "success"
+          );
+        };
+        reader.readAsDataURL(file);
+      };
+
+      /** Handle drop event */
+      window.handleFileDrop = (event) => {
+        const files = event.dataTransfer.files;
+        if (files.length > 0) {
+          processFile(files[0]);
+        }
+      };
+
+      /** Handle file input change */
+      window.handleFileSelect = (event) => {
+        const files = event.target.files;
+        if (files.length > 0) {
+          processFile(files[0]);
+        }
+      };
+
+      // --- Fungsi Copy Text ---
+
+      /**
+       * Menyalin teks ke clipboard dan menampilkan notifikasi.
+       * @param {string} textToCopy - Teks yang akan disalin.
+       */
+      const copyToClipboard = (textToCopy, elementType = "Text") => {
+        const tempInput = document.createElement("textarea");
+        tempInput.value = textToCopy;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+
+        showMessage(`${elementType} berhasil disalin ke clipboard!`, "success");
+      };
+
+      /** Menyalin semua hashtag yang ada */
+      window.copyAllHashtags = () => {
+        const hashtags = Array.from(
+          elements.hashtagsContainer.querySelectorAll("button")
+        )
+          .map((btn) => btn.textContent.trim())
+          .join(" ");
+        if (hashtags) {
+          copyToClipboard(hashtags, "Semua Hashtag");
+        } else {
+          showMessage("Tidak ada Hashtag untuk disalin.", "info");
+        }
+      };
+
+      // --- Fungsi Render Output ---
+
+      /**
+       * Membuat elemen tombol hashtag.
+       * @param {string} hashtag - Teks hashtag (misalnya: "#fotografi").
+       */
+      const createHashtagElement = (hashtag) => {
+        const button = document.createElement("button");
+        button.className =
+          "px-3 py-1 bg-blue-100 text-blue-800 text-sm font-semibold rounded-full hover:bg-blue-200 transition duration-150";
+        button.textContent = hashtag;
+        button.onclick = () => copyToClipboard(hashtag, "Hashtag");
+        return button;
+      };
+
+      /**
+       * Membuat elemen card caption.
+       * @param {Object} caption - Objek caption {text, tone}.
+       */
+      const createCaptionCard = (caption) => {
+        const card = document.createElement("div");
+        card.className =
+          "border border-gray-200 p-4 rounded-xl shadow-sm hover:shadow-md transition duration-200";
+
+        card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <h4 class="text-md font-medium text-gray-700">Caption Pilihan (${caption.tone}):</h4>
+                    <button class="copy-caption-btn px-3 py-1 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition duration-150 shadow-md flex items-center">
+                        <i data-lucide="copy" class="w-3 h-3 inline mr-1"></i> Copy Caption
+                    </button>
+                </div>
+                <p class="text-gray-600 text-sm leading-relaxed whitespace-pre-wrap">${caption.text}</p>
+            `;
+
+        // Tambahkan event listener ke tombol copy di dalam card
+        const copyButton = card.querySelector(".copy-caption-btn");
+        copyButton.onclick = () => copyToClipboard(caption.text, "Caption");
+
+        return card;
+      };
+
+      /** * Mengisi kontainer output dengan data dari Gemini.
+       * @param {Object} data - Objek JSON hasil dari Gemini.
+       */
+      const renderOutput = (data) => {
+        elements.hashtagsContainer.innerHTML = "";
+        elements.captionsContainer.innerHTML = "";
+
+        // Render Hashtags
+        if (data.hashtags && Array.isArray(data.hashtags)) {
+          data.hashtags.forEach((tag) => {
+            if (tag.startsWith("#")) {
+              elements.hashtagsContainer.appendChild(createHashtagElement(tag));
+            } else {
+              // Ensure it always starts with #
+              elements.hashtagsContainer.appendChild(
+                createHashtagElement("#" + tag)
+              );
+            }
+          });
+        } else {
+          elements.hashtagsContainer.innerHTML =
+            '<p class="text-gray-500 text-sm">Tidak ada hashtag yang dihasilkan.</p>';
+        }
+
+        // Render Captions
+        if (data.captions && Array.isArray(data.captions)) {
+          data.captions.forEach((caption) => {
+            elements.captionsContainer.appendChild(createCaptionCard(caption));
+          });
+        } else {
+          elements.captionsContainer.innerHTML =
+            '<p class="text-gray-500 text-sm">Tidak ada caption yang dihasilkan. Coba lagi atau ubah instruksi.</p>';
+        }
+
+        // Re-render lucide icons for the new elements
+        lucide.createIcons();
+
+        // Tampilkan output card
+        elements.outputCard.classList.remove("hidden");
+      };
+
+      // --- Fungsi Gemini API Call ---
+
+      /**
+       * Melakukan panggilan ke Gemini API dengan exponential backoff.
+       * @param {Object} payload - Payload untuk request API.
+       * @param {number} retries - Jumlah percobaan ulang yang tersisa.
+       * @returns {Promise<Response>}
+       */
+      const fetchWithBackoff = async (payload, retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            const response = await fetch(API_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            if (response.status === 429) {
+              // Too Many Requests
+              if (i < retries - 1) {
+                const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                await new Promise((resolve) => setTimeout(resolve, delay));
+                continue; // Coba lagi
+              }
+            }
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response;
+          } catch (error) {
+            if (i === retries - 1) throw error;
+            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        }
+      };
+
+      /** Fungsi utama untuk memanggil dan memproses hasil dari Gemini API */
+      const generateCaption = async () => {
+        if (!uploadedImageFile) {
+          showMessage("Harap unggah gambar terlebih dahulu.", "error");
+          return;
+        }
+
+        setLoading(true);
+        elements.outputCard.classList.remove("hidden");
+        elements.hashtagsContainer.innerHTML = "";
+        elements.captionsContainer.innerHTML =
+          '<p class="text-gray-500 text-center py-4">Menunggu respons dari AI...</p>';
+
+        // Membuat FormData untuk dikirim ke backend
+        const formData = new FormData();
+        formData.append("image", uploadedImageFile);
+        formData.append(
+          "instructions",
+          elements.instructionsInput.value.trim()
+        );
+        formData.append("captionType", elements.captionTypeSelect.value);
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            body: formData, // Kirim sebagai FormData
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(
+              errorData.message || `HTTP error! status: ${response.status}`
+            );
+          }
+
+          const result = await response.json();
+
+          if (result.captions && result.hashtags) {
+            renderOutput(result);
+            showMessage("Caption dan Hashtag berhasil dibuat!", "success");
+          } else if (result.success === false) {
+            throw new Error(result.message || "Respons API tidak valid.");
+          } else {
+            throw new Error(
+              "Respons API tidak memiliki format yang diharapkan."
+            );
+          }
+        } catch (error) {
+          console.error("Error saat memanggil API backend:", error);
+          showMessage(
+            "Gagal memproses gambar. Pastikan gambar jelas dan coba lagi. Detail: " +
+              error.message,
+            "error"
+          );
+
+          // Tampilkan pesan error di output area juga
+          elements.captionsContainer.innerHTML = `
+                    <div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                        <p class="font-bold">Error Pemrosesan</p>
+                        <p class="text-sm">Gagal mendapatkan hasil dari AI. Cek console log untuk detail teknis, atau coba ulangi proses dengan instruksi yang lebih sederhana.</p>
+                    </div>
+                `;
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // --- Event Listeners & Initial Setup ---
+
+      document.addEventListener("DOMContentLoaded", () => {
+        // Inisialisasi ikon Lucide
+        lucide.createIcons();
+
+        // Setup event listener untuk tombol generate
+        elements.generateButton.addEventListener("click", generateCaption);
+
+        // Re-enable button if file is already loaded (though it should be null on first load)
+        if (uploadedImageFile) {
+          elements.generateButton.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
